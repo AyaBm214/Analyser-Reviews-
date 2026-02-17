@@ -39,13 +39,22 @@ export function ReviewAnalyzer({
     onListingChange
 }: ReviewAnalyzerProps) {
 
+    // Normalize ratings (handle 10-point scale)
+    const normalizedReviews = useMemo(() => {
+        if (!reviews) return [];
+        return reviews.map(r => ({
+            ...r,
+            rating: r.rating > 5 ? r.rating / 2 : r.rating
+        }));
+    }, [reviews]);
+
     // --- 1. Aggregate Logic ---
     const aggregateResult = useMemo<AnalysisResult | null>(() => {
-        if (!reviews || reviews.length === 0) return null;
+        if (!normalizedReviews || normalizedReviews.length === 0) return null;
 
-        const count = reviews.length;
-        const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / count;
-        const negativeReviews = reviews.filter(r => r.sentiment === 'negative');
+        const count = normalizedReviews.length;
+        const avgRating = normalizedReviews.reduce((sum, r) => sum + r.rating, 0) / count;
+        const negativeReviews = normalizedReviews.filter(r => r.sentiment === 'negative');
 
         const getCategoryRating = (keywords: string[]) => {
             const issuesCount = negativeReviews.filter(r =>
@@ -69,12 +78,12 @@ export function ReviewAnalyzer({
             overallAssessment: `${listingName} has an average rating of ${avgRating.toFixed(1)} from ${count} reviews.`,
             categories
         };
-    }, [reviews, listingName]);
+    }, [normalizedReviews, listingName]);
 
     // --- 2. Drill-down / Filter Logic ---
     const filteredReviews = useMemo(() => {
-        if (!reviews) return [];
-        let filtered = reviews;
+        if (!normalizedReviews) return [];
+        let filtered = normalizedReviews;
 
         // Filter by Category
         if (selectedCategory && aggregateResult) {
@@ -104,18 +113,18 @@ export function ReviewAnalyzer({
         }
 
         return filtered;
-    }, [reviews, selectedCategory, searchQuery, aggregateResult]);
+    }, [normalizedReviews, selectedCategory, searchQuery, aggregateResult]);
 
     // --- 3. Top Listings Logic (Only for 'All Listings') ---
     const topListingsForCategory = useMemo(() => {
-        if (listingName !== 'All Listings' || !selectedCategory || !reviews || !aggregateResult) return [];
+        if (listingName !== 'All Listings' || !selectedCategory || !normalizedReviews || !aggregateResult) return [];
 
         const category = aggregateResult.categories.find(c => c.name === selectedCategory);
         if (!category) return [];
 
         const listingCounts: Record<string, number> = {};
 
-        reviews.forEach(r => {
+        normalizedReviews.forEach(r => {
             const hasIssue = r.tags?.some(tag => category.keywords.some(k => tag.toLowerCase().includes(k))) ||
                 category.keywords.some(k => r.text.toLowerCase().includes(k));
 
@@ -129,10 +138,10 @@ export function ReviewAnalyzer({
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 5); // Top 5
-    }, [listingName, selectedCategory, reviews, aggregateResult]);
+    }, [listingName, selectedCategory, normalizedReviews, aggregateResult]);
 
 
-    if (!reviews || !aggregateResult) return null;
+    if (!normalizedReviews || !aggregateResult) return null;
 
     return (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 h-full flex flex-col">
